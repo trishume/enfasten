@@ -23,8 +23,11 @@ type config struct {
 	OutputFolder string
 	ImageFolder  string
 	ManifestFile string
-	Widths       []int
-	basePath     string
+	// A number between 0-1 where if the downscaling is greater
+	// than this fraction of the width it doesn't bother.
+	ScaleThreshold float64
+	Widths         []int
+	basePath       string
 }
 
 type foundImage struct {
@@ -80,7 +83,9 @@ func readConfig(basePath string) (conf config, err error) {
 		OutputFolder: "_fastsite",
 		ImageFolder:  "assets/images",
 		ManifestFile: "enfasten_manifest.yml",
-		Widths:       []int{},
+		// ManifestFile:   "",
+		ScaleThreshold: 0.9,
+		Widths:         []int{},
 	}
 
 	bytes, err := readFileBytes(path.Join(basePath, "enfasten.yml"))
@@ -89,6 +94,9 @@ func readConfig(basePath string) (conf config, err error) {
 }
 
 func readManifest(manifestPath string) (manifest map[string]builtImage, err error) {
+	if manifestPath == "" {
+		return // use empty manifest
+	}
 	if _, statError := os.Stat(manifestPath); os.IsNotExist(statError) {
 		log.Print("Can't find manifest, starting with an empty one")
 		return // no manifest, starting with an empty one
@@ -102,6 +110,10 @@ func readManifest(manifestPath string) (manifest map[string]builtImage, err erro
 }
 
 func saveManifest(manifestPath string, manifest map[string]builtImage) (err error) {
+	if manifestPath == "" {
+		return // don't persist manifest
+	}
+
 	out, err := yaml.Marshal(manifest)
 	if err != nil {
 		return
@@ -191,7 +203,8 @@ func saveImage(outPath string, extension string, img image.Image) (err error) {
 	case ".png":
 		err = png.Encode(df, img)
 	case ".jpg":
-		err = jpeg.Encode(df, img, nil)
+		options := jpeg.Options{Quality: 90}
+		err = jpeg.Encode(df, img, &options)
 	default:
 		err = fmt.Errorf("Unrecognized extension %s", extension)
 	}
@@ -233,7 +246,7 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 	originalName := fmt.Sprintf("%s-original%s", slug, extension)
 	originalPath := path.Join(imageFolder, originalName)
 
-	if _, err = os.Stat(originalPath); !os.IsNotExist(err) {
+	if _, err = os.Stat(originalPath); os.IsNotExist(err) {
 		err = copyFile(imagePath, originalPath)
 		if err != nil {
 			return
@@ -254,10 +267,24 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 		downscaleRatio := float64(w) / float64(built.Width)
 		destHeight := int(float64(built.Height) * downscaleRatio)
 
+		if downscaleRatio > conf.ScaleThreshold {
+			continue // too small of a change in size to be worth it
+		}
+
+		if downscaleRatio > 0.7 && extension == ".jpg" {
+			// re-encoding JPEG at a slightly smaller size either:
+			// - loses quality if we don't encode the output at 100
+			// - increases size if we encode the output at 100
+			continue
+		}
+
 		log.Printf("Downscaling %s from %v to (%d,%d)", slug, inputImage.Bounds(), w, destHeight)
 
 		outName := fmt.Sprintf("%s-%dpx%s", slug, w, extension)
 		outPath := path.Join(imageFolder, outName)
+
+		builtScaled := builtImageFile{FileName: outName, Width: w, Height: destHeight}
+		built.Files = append(built.Files, builtScaled)
 
 		if _, err := os.Stat(outPath); !os.IsNotExist(err) {
 			log.Printf("Image already exists, skipping: %s", outPath)
@@ -275,9 +302,6 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 		if err != nil {
 			return
 		}
-
-		builtScaled := builtImageFile{FileName: outName, Width: w, Height: destHeight}
-		built.Files = append(built.Files, builtScaled)
 	}
 
 	return
@@ -316,7 +340,11 @@ func buildFastSite(basePath string) (err error) {
 		return
 	}
 
-	manifestPath := path.Join(conf.basePath, conf.ManifestFile)
+	manifestPath := conf.ManifestFile
+	if manifestPath != "" {
+		manifestPath = path.Join(conf.basePath, manifestPath)
+	}
+
 	oldManifest, err := readManifest(manifestPath)
 	if err != nil {
 		return
