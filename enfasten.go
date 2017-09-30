@@ -4,13 +4,17 @@ import (
 	"crypto/sha256"
 	"flag"
 	"fmt"
-	"github.com/bmatcuk/doublestar"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
 
+	"github.com/bamiaux/rez"
+	"github.com/bmatcuk/doublestar"
 	"gopkg.in/yaml.v2"
 )
 
@@ -38,6 +42,25 @@ type builtImage struct {
 	Width  int
 	Height int
 	Files  []builtImageFile
+}
+
+func (conf *config) ImageFolderPath() string {
+	return path.Join(conf.basePath, conf.OutputFolder, conf.ImageFolder)
+}
+
+func copyFile(source string, dest string) error {
+	sf, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer sf.Close()
+	df, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer df.Close()
+	_, err = io.Copy(df, sf)
+	return err
 }
 
 func readFileBytes(path string) (bytes []byte, err error) {
@@ -121,8 +144,117 @@ func getSlug(imagePath string, hash []byte) string {
 	return fmt.Sprintf("%s-%x", fileName, hashFragment)
 }
 
-func buildImage(conf *config, path string, slug string) (built builtImage, err error) {
-	log.Printf("Building image %s from %s", slug, path)
+func downscaleImage(width int, height int, inputImage image.Image) (downscaled image.Image, err error) {
+	// allocate correct buffer type
+	r := image.Rect(0, 0, width, height)
+	switch t := inputImage.(type) {
+	case *image.YCbCr:
+		downscaled = image.NewYCbCr(r, t.SubsampleRatio)
+	case *image.RGBA:
+		downscaled = image.NewRGBA(r)
+	case *image.NRGBA:
+		downscaled = image.NewNRGBA(r)
+	case *image.Gray:
+		downscaled = image.NewGray(r)
+	default:
+		err = fmt.Errorf("Unsupported image colour format %T.", inputImage)
+	}
+
+	err = rez.Convert(downscaled, inputImage, rez.NewBilinearFilter())
+	return
+}
+
+func saveImage(outPath string, extension string, img image.Image) (err error) {
+	log.Printf("Saving %s with ext %s", outPath, extension)
+	// encode the output
+	df, err := os.Create(outPath)
+	if err != nil {
+		return err
+	}
+	defer df.Close()
+
+	switch extension {
+	case ".png":
+		err = png.Encode(df, img)
+	case ".jpg":
+		err = jpeg.Encode(df, img, nil)
+	default:
+		err = fmt.Errorf("Unrecognized extension %s", extension)
+	}
+
+	return
+}
+
+func buildImage(conf *config, imagePath string, slug string) (built builtImage, err error) {
+	log.Printf("Building image %s from %s", slug, imagePath)
+	extension := path.Ext(imagePath)
+
+	// load image
+	f, err := os.OpenFile(imagePath, os.O_RDONLY, 0)
+	if err != nil {
+		f.Close()
+		return
+	}
+
+	var inputImage image.Image
+	switch extension {
+	case ".png":
+		inputImage, err = png.Decode(f)
+	case ".jpg":
+		inputImage, err = jpeg.Decode(f)
+	default:
+		err = fmt.Errorf("Unrecognized extension %s", extension)
+		return
+	}
+
+	f.Close()
+	if err != nil {
+		return
+	}
+	built.Width = inputImage.Bounds().Dx()
+	built.Height = inputImage.Bounds().Dy()
+
+	// copy-paste original file
+	imageFolder := conf.ImageFolderPath()
+	originalName := fmt.Sprintf("%s-original%s", slug, extension)
+	originalPath := path.Join(imageFolder, originalName)
+	// TODO uncomment
+	// log.Printf("Skipping original copy for %s", originalPath)
+	err = copyFile(imagePath, originalPath)
+	if err != nil {
+		return
+	}
+
+	builtOriginal := builtImageFile{FileName: originalName, Width: built.Width, Height: built.Height}
+	built.Files = append(built.Files, builtOriginal)
+
+	// resize to relevant sizes
+	for _, w := range conf.Widths {
+		if w >= built.Width {
+			continue // we never want to upscale
+		}
+		downscaleRatio := float64(w) / float64(built.Width)
+		destHeight := int(float64(built.Height) * downscaleRatio)
+		log.Printf("Downscaling %s from %v to (%d,%d)", slug, inputImage.Bounds(), w, destHeight)
+
+		// do the scaling
+		var downscaledImage image.Image
+		downscaledImage, err = downscaleImage(w, destHeight, inputImage)
+		if err != nil {
+			return
+		}
+
+		outName := fmt.Sprintf("%s-%dpx%s", slug, w, extension)
+		outPath := path.Join(imageFolder, outName)
+		err = saveImage(outPath, extension, downscaledImage)
+		if err != nil {
+			return
+		}
+
+		builtScaled := builtImageFile{FileName: outName, Width: w, Height: destHeight}
+		built.Files = append(built.Files, builtScaled)
+	}
+
 	return
 }
 
@@ -161,6 +293,11 @@ func buildFastSite(basePath string) (err error) {
 	}
 
 	oldManifest, err := readManifest(path.Join(conf.basePath, conf.ManifestFile))
+	if err != nil {
+		return
+	}
+
+	err = os.MkdirAll(conf.ImageFolderPath(), os.ModePerm)
 	if err != nil {
 		return
 	}
