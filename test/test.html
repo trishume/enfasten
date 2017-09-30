@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Image test page</title>
+</head>
+<body>
+<img src="_fastsite/assets/images/treegrid-cabb7ce1-original.png" width="660" id="pic"><br>
+<h3>
+<a onmouseover="original()">Original</a>
+<a onmouseover="px1320()">1320</a>
+<a onmouseover="px660()">660</a>
+</h3>
+<script type="text/javascript">
+var pic = document.getElementById("pic");
+function original() {
+  pic.src = "_fastsite/assets/images/treegrid-cabb7ce1-original.png";
+}
+function px1320() {
+  pic.src = "_fastsite/assets/images/treegrid-cabb7ce1-1320px.png";
+}
+function px660() {
+  pic.src = "_fastsite/assets/images/treegrid-cabb7ce1-660px.png";
+}
+</script>
+</body>
+</html>

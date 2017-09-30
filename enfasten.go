@@ -65,10 +65,10 @@ func copyFile(source string, dest string) error {
 
 func readFileBytes(path string) (bytes []byte, err error) {
 	f, err := os.OpenFile(path, os.O_RDONLY, 0)
-	defer f.Close()
 	if err != nil {
 		return
 	}
+	defer f.Close()
 
 	bytes, err = ioutil.ReadAll(f)
 	return
@@ -101,6 +101,22 @@ func readManifest(manifestPath string) (manifest map[string]builtImage, err erro
 	return
 }
 
+func saveManifest(manifestPath string, manifest map[string]builtImage) (err error) {
+	out, err := yaml.Marshal(manifest)
+	if err != nil {
+		return
+	}
+
+	df, err := os.Create(manifestPath)
+	if err != nil {
+		return err
+	}
+	defer df.Close()
+	_, err = df.Write(out)
+
+	return
+}
+
 func hashFile(path string) (hash []byte, err error) {
 	f, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
@@ -122,7 +138,6 @@ func discoverImages(inFolder string) (results []foundImage, err error) {
 	if err != nil {
 		return
 	}
-	fmt.Printf("%v\n", matches)
 
 	for _, path := range matches {
 		var hash []byte
@@ -132,7 +147,6 @@ func discoverImages(inFolder string) (results []foundImage, err error) {
 		}
 		results = append(results, foundImage{path, hash})
 	}
-	fmt.Printf("%v\n", results)
 	return
 }
 
@@ -160,7 +174,7 @@ func downscaleImage(width int, height int, inputImage image.Image) (downscaled i
 		err = fmt.Errorf("Unsupported image colour format %T.", inputImage)
 	}
 
-	err = rez.Convert(downscaled, inputImage, rez.NewBilinearFilter())
+	err = rez.Convert(downscaled, inputImage, rez.NewLanczosFilter(3))
 	return
 }
 
@@ -218,11 +232,14 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 	imageFolder := conf.ImageFolderPath()
 	originalName := fmt.Sprintf("%s-original%s", slug, extension)
 	originalPath := path.Join(imageFolder, originalName)
-	// TODO uncomment
-	// log.Printf("Skipping original copy for %s", originalPath)
-	err = copyFile(imagePath, originalPath)
-	if err != nil {
-		return
+
+	if _, err = os.Stat(originalPath); !os.IsNotExist(err) {
+		err = copyFile(imagePath, originalPath)
+		if err != nil {
+			return
+		}
+	} else {
+		log.Printf("Original already copied, skipping: %s", originalPath)
 	}
 
 	builtOriginal := builtImageFile{FileName: originalName, Width: built.Width, Height: built.Height}
@@ -233,9 +250,19 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 		if w >= built.Width {
 			continue // we never want to upscale
 		}
+
 		downscaleRatio := float64(w) / float64(built.Width)
 		destHeight := int(float64(built.Height) * downscaleRatio)
+
 		log.Printf("Downscaling %s from %v to (%d,%d)", slug, inputImage.Bounds(), w, destHeight)
+
+		outName := fmt.Sprintf("%s-%dpx%s", slug, w, extension)
+		outPath := path.Join(imageFolder, outName)
+
+		if _, err := os.Stat(outPath); !os.IsNotExist(err) {
+			log.Printf("Image already exists, skipping: %s", outPath)
+			continue // already exists
+		}
 
 		// do the scaling
 		var downscaledImage image.Image
@@ -244,8 +271,6 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 			return
 		}
 
-		outName := fmt.Sprintf("%s-%dpx%s", slug, w, extension)
-		outPath := path.Join(imageFolder, outName)
 		err = saveImage(outPath, extension, downscaledImage)
 		if err != nil {
 			return
@@ -285,14 +310,14 @@ func buildFastSite(basePath string) (err error) {
 	}
 
 	conf.basePath = basePath
-	fmt.Printf("%+v\n", conf)
 
 	foundImages, err := discoverImages(path.Join(conf.basePath, conf.InputFolder))
 	if err != nil {
 		return
 	}
 
-	oldManifest, err := readManifest(path.Join(conf.basePath, conf.ManifestFile))
+	manifestPath := path.Join(conf.basePath, conf.ManifestFile)
+	oldManifest, err := readManifest(manifestPath)
 	if err != nil {
 		return
 	}
@@ -302,13 +327,13 @@ func buildFastSite(basePath string) (err error) {
 		return
 	}
 
-	newManifest, pathToSlug, err := buildNewManifest(&conf, foundImages, oldManifest)
+	newManifest, _, err := buildNewManifest(&conf, foundImages, oldManifest)
 	if err != nil {
 		return
 	}
 
-	fmt.Printf("%v\n", newManifest)
-	fmt.Printf("%v\n", pathToSlug)
+	saveManifest(manifestPath, newManifest)
+
 	return
 }
 
