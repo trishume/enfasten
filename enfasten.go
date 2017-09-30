@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/bmatcuk/doublestar"
 	"io/ioutil"
 	"log"
 	"os"
@@ -15,6 +16,7 @@ type config struct {
 	InputFolder  string
 	OutputFolder string
 	Widths       []int
+	basePath     string
 }
 
 func readConfig(basePath string) (conf config, err error) {
@@ -35,6 +37,11 @@ func readConfig(basePath string) (conf config, err error) {
 	return
 }
 
+func discoverImages(conf *config) {
+	matches, err := doublestar.Glob(path.Join(basePath, "**/*.{png,jpg}"))
+	fmt.Printf("%v", matches)
+}
+
 func main() {
 	basePath := flag.String("basepath", ".", "The folder in which to search for enfasten.yml")
 	flag.Parse()
@@ -42,5 +49,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	conf.basePath = *basePath
 	fmt.Printf("%+v", conf)
+	discoverImages(&conf)
 }
