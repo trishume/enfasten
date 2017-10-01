@@ -216,6 +216,10 @@ This was a weekend project, there's a few things I haven't got around to yet. If
     - [ ] SVG optimization
 - [ ] Generate service workers and set them up to preload and cache things for extra speed!
 
+## Where the heck did the name come from?
+
+It sounded like a word that would mean "to make fast". It also sounds like [Emscripten](https://github.com/kripken/emscripten) which is another project about making the web fast, although in a totally different and unrelated way. In my head I alternate between pronouncing it "En-fast-en" and "En-fassen". I also Googled it and it didn't look like it collided with anything too important.
+
 ## License
 
 This project is released under the Apache license and was written by [Tristan Hume](http://thume.ca/)
