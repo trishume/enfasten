@@ -117,6 +117,8 @@ test
 
 ## Getting Started
 
+On the [releases page](https://github.com/trishume/enfasten/releases) you can download pre-built static binaries for macOS and Linux that you can put somewhere in your `PATH`.
+
 If you have [Go](https://golang.org/) installed you should be able to run:
 
 ```bash
