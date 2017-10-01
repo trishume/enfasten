@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -24,6 +26,21 @@ type config struct {
 
 func (conf *config) ImageFolderPath() string {
 	return path.Join(conf.basePath, conf.OutputFolder, conf.ImageFolder)
+}
+
+func copyFile(source string, dest string) error {
+	sf, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer sf.Close()
+	df, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer df.Close()
+	_, err = io.Copy(df, sf)
+	return err
 }
 
 func readFileBytes(path string) (bytes []byte, err error) {
@@ -81,12 +98,39 @@ func buildFastSite(basePath string) (err error) {
 		return
 	}
 
-	newManifest, _, err := buildNewManifest(&conf, foundImages, oldManifest)
+	newManifest, pathToSlug, err := buildNewManifest(&conf, foundImages, oldManifest)
 	if err != nil {
 		return
 	}
 
-	saveManifest(manifestPath, newManifest)
+	err = saveManifest(manifestPath, newManifest)
+	if err != nil {
+		return
+	}
+
+	fmt.Printf("%v\n", pathToSlug)
+
+	transformConf := transformConfig{
+		config:     &conf,
+		manifest:   newManifest,
+		pathToSlug: pathToSlug,
+	}
+	whitelist, err := transferAndTransformAll(&transformConf)
+	if err != nil {
+		return
+	}
+
+	// whitelist all our files
+	imageFolder := conf.ImageFolderPath()
+	for _, bImg := range newManifest {
+		for _, bImgFile := range bImg.Files {
+			whitelist = append(whitelist, path.Join(imageFolder, bImgFile.FileName))
+		}
+	}
+
+	// fmt.Printf("Keep: %v\n", whitelist)
+
+	err = deleteNonWhitelist(&conf, whitelist)
 
 	return
 }

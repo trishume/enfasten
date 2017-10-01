@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 
 	"github.com/bamiaux/rez"
 	"github.com/bmatcuk/doublestar"
@@ -31,21 +32,6 @@ type builtImage struct {
 	Width  int
 	Height int
 	Files  []builtImageFile
-}
-
-func copyFile(source string, dest string) error {
-	sf, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer sf.Close()
-	df, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer df.Close()
-	_, err = io.Copy(df, sf)
-	return err
 }
 
 func readManifest(manifestPath string) (manifest map[string]builtImage, err error) {
@@ -265,6 +251,7 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 func buildNewManifest(conf *config, foundImages []foundImage, oldManifest map[string]builtImage) (newManifest map[string]builtImage, pathToSlug map[string]string, err error) {
 	newManifest = map[string]builtImage{}
 	pathToSlug = map[string]string{}
+	inputPath := path.Join(conf.basePath, conf.InputFolder)
 	for _, img := range foundImages {
 		slug := getSlug(img.Path, img.Hash)
 		if built, ok := oldManifest[slug]; ok {
@@ -277,7 +264,12 @@ func buildNewManifest(conf *config, foundImages []foundImage, oldManifest map[st
 			}
 			newManifest[slug] = built
 		}
-		pathToSlug[img.Path] = slug
+		var relPath string
+		relPath, err = filepath.Rel(inputPath, img.Path)
+		if err != nil {
+			return
+		}
+		pathToSlug[relPath] = slug
 	}
 	return
 }
