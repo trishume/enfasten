@@ -5,7 +5,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 )
+
+// Yes I'm using a regex to parse HTML, yes everyone tells you not to do that.
+// This is for personal sites so if this doesn't match your HTML, fix your HTML.
+// This saves me having to do a bunch of tree traversal and serializing.
+var imgRegex = regexp.MustCompile(`<img ([^>]*)src="([^"]+)"([^>]*)>`)
 
 type transformConfig struct {
 	*config
@@ -22,9 +28,22 @@ func translatePath(conf *config, file string) string {
 	return path.Join(conf.basePath, conf.OutputFolder, relPath)
 }
 
-func transferFile(file string, outPath string, whitelist *[]string) (err error) {
-	*whitelist = append(*whitelist, outPath)
-	err = copyFile(file, outPath)
+func translateHtml(inPath string, outPath string) (err error) {
+	log.Printf("Translating %s", inPath)
+	bytes, err := readFileBytes(inPath)
+
+	newBytes := imgRegex.ReplaceAllFunc(bytes, func(match []byte) []byte {
+		log.Printf("Image: %s", match)
+		return match
+	})
+
+	df, err := os.Create(outPath)
+	if err != nil {
+		return err
+	}
+	defer df.Close()
+	df.Write(newBytes)
+
 	return
 }
 
@@ -34,9 +53,12 @@ func transferAndTransform(conf *transformConfig, whitelist *[]string, file strin
 	err = os.MkdirAll(path.Dir(outPath), os.ModePerm)
 	extension := path.Ext(file)
 
+	*whitelist = append(*whitelist, outPath)
 	switch extension {
+	case ".html":
+		err = translateHtml(file, outPath)
 	default:
-		err = transferFile(file, outPath, whitelist)
+		err = copyFile(file, outPath)
 	}
 	return
 }
@@ -93,6 +115,13 @@ func deleteNonWhitelist(conf *config, whitelist []string) (err error) {
 	err = filepath.Walk(outputPath, filepath.WalkFunc(walkFunk))
 
 	log.Printf("Delete: %v\n", toRemove)
+
+	for _, item := range toRemove {
+		err = os.RemoveAll(item)
+		if err != nil {
+			return
+		}
+	}
 
 	return
 }
