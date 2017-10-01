@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -22,11 +21,16 @@ type config struct {
 	// than this fraction of the width it doesn't bother.
 	ScaleThreshold float64
 	Widths         []int
+	Blacklist      []string
 	basePath       string
 }
 
 func (conf *config) ImageFolderPath() string {
 	return path.Join(conf.basePath, conf.OutputFolder, conf.ImageFolder)
+}
+
+func (conf *config) InputFolderPath() string {
+	return path.Join(conf.basePath, conf.InputFolder)
 }
 
 func copyFile(source string, dest string) error {
@@ -80,7 +84,7 @@ func buildFastSite(basePath string) (err error) {
 
 	conf.basePath = basePath
 
-	foundImages, err := discoverImages(path.Join(conf.basePath, conf.InputFolder))
+	foundImages, err := discoverImages(&conf, path.Join(conf.basePath, conf.InputFolder))
 	if err != nil {
 		return
 	}
@@ -110,7 +114,7 @@ func buildFastSite(basePath string) (err error) {
 		return
 	}
 
-	fmt.Printf("%v\n", pathToSlug)
+	// fmt.Printf("%v\n", pathToSlug)
 
 	transformConf := transformConfig{
 		config:     &conf,

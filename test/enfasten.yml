@@ -2,3 +2,8 @@ inputfolder: _site
 outputfolder: _fastsite
 sizesattr: 660px
 widths: [660,1320]
+blacklist:
+  - assets/postassets/doubleVision/out.png
+  - assets/postassets/doubleVision/DayNight.png
+  - assets/themes/thume/images/bubble.png
+  - favicon.png

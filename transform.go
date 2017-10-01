@@ -84,7 +84,7 @@ func rebuildImage(conf *transformConfig, relPath string, captures [][]byte) []by
 }
 
 func translateHtml(conf *transformConfig, inPath string, outPath string) (err error) {
-	log.Printf("Translating %s", inPath)
+	// log.Printf("Translating %s", inPath)
 	bytes, err := readFileBytes(inPath)
 
 	// set up for HTML relative paths
@@ -94,13 +94,13 @@ func translateHtml(conf *transformConfig, inPath string, outPath string) (err er
 	if err != nil {
 		log.Fatalf("Can't make relative path %v", err)
 	}
-	log.Printf("Relative path: %s", relPath)
+	// log.Printf("Relative path: %s", relPath)
 
 	newBytes := imgRegex.ReplaceAllFunc(bytes, func(match []byte) []byte {
 		captures := imgRegex.FindSubmatch(match)
-		log.Printf("Old Image: %s", match)
+		// log.Printf("Old Image: %s", match)
 		rebuilt := rebuildImage(conf, relPath, captures)
-		log.Printf("New Image: %s", rebuilt)
+		// log.Printf("New Image: %s", rebuilt)
 		return rebuilt
 	})
 
@@ -181,7 +181,9 @@ func deleteNonWhitelist(conf *config, whitelist []string) (err error) {
 	}
 	err = filepath.Walk(outputPath, filepath.WalkFunc(walkFunk))
 
-	log.Printf("Delete: %v\n", toRemove)
+	if len(toRemove) > 0 {
+		log.Printf("Delete: %v\n", toRemove)
+	}
 
 	for _, item := range toRemove {
 		err = os.RemoveAll(item)

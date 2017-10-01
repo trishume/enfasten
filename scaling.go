@@ -87,13 +87,34 @@ func hashFile(path string) (hash []byte, err error) {
 	return
 }
 
-func discoverImages(inFolder string) (results []foundImage, err error) {
+func isBlacklisted(conf *config, filePath string) bool {
+	relPath, err := filepath.Rel(conf.InputFolderPath(), filePath)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	for _, blackPath := range conf.Blacklist {
+		matched, err := path.Match(blackPath, relPath)
+		if err != nil {
+			log.Fatalf("Invalid blacklist pattern '%s': %v", blackPath, err)
+		}
+		if matched {
+			return true
+		}
+	}
+	return false
+}
+
+func discoverImages(conf *config, inFolder string) (results []foundImage, err error) {
 	matches, err := doublestar.Glob(path.Join(inFolder, "**/*.{png,jpg}"))
 	if err != nil {
 		return
 	}
 
 	for _, path := range matches {
+		if isBlacklisted(conf, path) {
+			continue
+		}
+
 		var hash []byte
 		hash, err = hashFile(path)
 		if err != nil {
