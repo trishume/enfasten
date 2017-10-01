@@ -20,11 +20,14 @@ type config struct {
 	OptimCommand []string
 	// A number between 0-1 where if the downscaling is greater
 	// than this fraction of the width it doesn't bother.
-	ScaleThreshold float64
-	Widths         []int
-	Blacklist      []string
-	basePath       string
-	doCulling      bool
+	ScaleThreshold    float64
+	JpgScaleThreshold float64
+	JpgQuality        int
+	DoCopy            bool
+	Widths            []int
+	Blacklist         []string
+	basePath          string
+	doCulling         bool
 }
 
 func (conf *config) ImageFolderPath() string {
@@ -69,12 +72,18 @@ func readConfig(basePath string) (conf config, err error) {
 		ManifestFile: "enfasten_manifest.yml",
 		SizesAttr:    "",
 		OptimCommand: nil,
+		DoCopy:       true,
 		// ManifestFile:   "",
-		ScaleThreshold: 0.9,
-		Widths:         []int{},
+		ScaleThreshold:    0.9,
+		JpgScaleThreshold: 0.7,
+		JpgQuality:        90,
+		Widths:            []int{},
 	}
 
 	bytes, err := readFileBytes(path.Join(basePath, "enfasten.yml"))
+	if err != nil {
+		return
+	}
 	err = yaml.Unmarshal(bytes, &conf)
 	return
 }
@@ -115,6 +124,11 @@ func buildFastSite(basePath string, doCulling bool) (err error) {
 
 	err = saveManifest(manifestPath, newManifest)
 	if err != nil {
+		return
+	}
+
+	// TODO also clean up files when not copying
+	if !conf.DoCopy {
 		return
 	}
 

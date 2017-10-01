@@ -90,6 +90,9 @@ func hashFile(path string) (hash []byte, err error) {
 }
 
 func isBlacklisted(conf *config, filePath string) bool {
+	if conf.Blacklist == nil {
+		return false
+	}
 	relPath, err := filepath.Rel(conf.InputFolderPath(), filePath)
 	if err != nil {
 		log.Fatalf("%v", err)
@@ -155,7 +158,7 @@ func downscaleImage(width int, height int, inputImage image.Image) (downscaled i
 	return
 }
 
-func saveImage(outPath string, extension string, img image.Image) (err error) {
+func saveImage(conf *config, outPath string, extension string, img image.Image) (err error) {
 	log.Printf("Saving %s with ext %s", outPath, extension)
 	// encode the output
 	df, err := os.Create(outPath)
@@ -168,7 +171,7 @@ func saveImage(outPath string, extension string, img image.Image) (err error) {
 	case ".png":
 		err = png.Encode(df, img)
 	case ".jpg":
-		options := jpeg.Options{Quality: 90}
+		options := jpeg.Options{Quality: conf.JpgQuality}
 		err = jpeg.Encode(df, img, &options)
 	default:
 		err = fmt.Errorf("Unrecognized extension %s", extension)
@@ -238,7 +241,7 @@ func buildImage(conf *config, imagePath string, slug string, newImages *[]string
 			continue // too small of a change in size to be worth it
 		}
 
-		if downscaleRatio > 0.7 && extension == ".jpg" {
+		if downscaleRatio > conf.JpgScaleThreshold && extension == ".jpg" {
 			// re-encoding JPEG at a slightly smaller size either:
 			// - loses quality if we don't encode the output at 100
 			// - increases size if we encode the output at 100
@@ -266,7 +269,7 @@ func buildImage(conf *config, imagePath string, slug string, newImages *[]string
 		}
 
 		*newImages = append(*newImages, outPath)
-		err = saveImage(outPath, extension, downscaledImage)
+		err = saveImage(conf, outPath, extension, downscaledImage)
 		if err != nil {
 			return
 		}
