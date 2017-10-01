@@ -28,12 +28,31 @@ func translatePath(conf *config, file string) string {
 	return path.Join(conf.basePath, conf.OutputFolder, relPath)
 }
 
-func translateHtml(inPath string, outPath string) (err error) {
+func findImagePath(conf *config, fileDir string, relRef string) string {
+	if relRef[0] == '/' {
+		return relRef[1:len(relRef)]
+	} else {
+		return path.Join(fileDir, relRef)
+	}
+}
+
+func translateHtml(conf *transformConfig, inPath string, outPath string) (err error) {
 	log.Printf("Translating %s", inPath)
 	bytes, err := readFileBytes(inPath)
 
+	// set up for HTML relative paths
+	inputPath := path.Join(conf.basePath, conf.InputFolder)
+	dirPath := path.Dir(inPath)
+	relPath, err := filepath.Rel(inputPath, dirPath)
+	if err != nil {
+		log.Fatalf("Can't make relative path %v", err)
+	}
+	log.Printf("Relative path: %s", relPath)
+
 	newBytes := imgRegex.ReplaceAllFunc(bytes, func(match []byte) []byte {
-		log.Printf("Image: %s", match)
+		captures := imgRegex.FindSubmatch(match)
+		keyPath := findImagePath(conf.config, relPath, string(captures[2]))
+		log.Printf("Image: %s - %s - %s", match, captures[2], keyPath)
 		return match
 	})
 
@@ -56,7 +75,7 @@ func transferAndTransform(conf *transformConfig, whitelist *[]string, file strin
 	*whitelist = append(*whitelist, outPath)
 	switch extension {
 	case ".html":
-		err = translateHtml(file, outPath)
+		err = translateHtml(conf, file, outPath)
 	default:
 		err = copyFile(file, outPath)
 	}
