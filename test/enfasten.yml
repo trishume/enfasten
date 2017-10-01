@@ -2,6 +2,7 @@ inputfolder: _site
 outputfolder: _fastsite
 sizesattr: 660px
 widths: [660,1320]
+optimcommand: ['open', '-a', 'ImageOptim']
 blacklist:
   - assets/postassets/doubleVision/out.png
   - assets/postassets/doubleVision/DayNight.png

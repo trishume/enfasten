@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 
@@ -175,7 +176,7 @@ func saveImage(outPath string, extension string, img image.Image) (err error) {
 	return
 }
 
-func buildImage(conf *config, imagePath string, slug string) (built builtImage, err error) {
+func buildImage(conf *config, imagePath string, slug string, newImages *[]string) (built builtImage, err error) {
 	log.Printf("Building image %s from %s", slug, imagePath)
 	extension := path.Ext(imagePath)
 
@@ -211,6 +212,7 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 	originalPath := path.Join(imageFolder, originalName)
 
 	if _, err = os.Stat(originalPath); os.IsNotExist(err) {
+		*newImages = append(*newImages, originalPath)
 		err = copyFile(imagePath, originalPath)
 		if err != nil {
 			return
@@ -262,6 +264,7 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 			return
 		}
 
+		*newImages = append(*newImages, outPath)
 		err = saveImage(outPath, extension, downscaledImage)
 		if err != nil {
 			return
@@ -271,9 +274,22 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 	return
 }
 
+func optimizeImages(conf *config, newImages []string) (err error) {
+	if conf.OptimCommand == nil || len(newImages) == 0 {
+		return
+	}
+
+	args := append(conf.OptimCommand, newImages...)
+	log.Printf("Optimizing with %v", args)
+	cmd := exec.Command(args[0], args[1:len(args)]...)
+	err = cmd.Run()
+	return
+}
+
 func buildNewManifest(conf *config, foundImages []foundImage, oldManifest map[string]builtImage) (newManifest map[string]builtImage, pathToSlug map[string]string, err error) {
 	newManifest = map[string]builtImage{}
 	pathToSlug = map[string]string{}
+	newImages := []string{}
 	inputPath := path.Join(conf.basePath, conf.InputFolder)
 	for _, img := range foundImages {
 		slug := getSlug(img.Path, img.Hash)
@@ -281,7 +297,7 @@ func buildNewManifest(conf *config, foundImages []foundImage, oldManifest map[st
 			newManifest[slug] = built
 		} else {
 			var built builtImage
-			built, err = buildImage(conf, img.Path, slug)
+			built, err = buildImage(conf, img.Path, slug, &newImages)
 			if err != nil {
 				return
 			}
@@ -294,5 +310,10 @@ func buildNewManifest(conf *config, foundImages []foundImage, oldManifest map[st
 		}
 		pathToSlug[relPath] = slug
 	}
+
+	log.Printf("New images: %v", newImages)
+
+	err = optimizeImages(conf, newImages)
+
 	return
 }
