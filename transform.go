@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 )
 
 // Yes I'm using a regex to parse HTML, yes everyone tells you not to do that.
@@ -36,6 +38,51 @@ func findImagePath(conf *config, fileDir string, relRef string) string {
 	}
 }
 
+func nameToImagePath(conf *config, name string) string {
+	return path.Join("/", conf.ImageFolder, name)
+}
+
+func rebuildImage(conf *transformConfig, relPath string, captures [][]byte) []byte {
+	keyPath := findImagePath(conf.config, relPath, string(captures[2]))
+	slug, ok := conf.pathToSlug[keyPath]
+	if !ok {
+		return captures[0]
+	}
+	built := conf.manifest[slug]
+
+	var buf bytes.Buffer
+
+	buf.WriteString("<img ")
+	buf.Write(captures[1])
+	buf.WriteString(`src="`)
+	buf.WriteString(nameToImagePath(conf.config, built.OriginalName))
+	buf.WriteString(`"`)
+
+	// if there's only one image no point in it being responsive
+	if len(built.Files) > 1 {
+		buf.WriteString(` srcset="`)
+		for i, builtFile := range built.Files {
+			if i != 0 {
+				buf.WriteString(`, `)
+			}
+			buf.WriteString(nameToImagePath(conf.config, builtFile.FileName))
+			buf.WriteString(` `)
+			buf.WriteString(strconv.Itoa(builtFile.Width))
+			buf.WriteString(`w`)
+		}
+		if conf.SizesAttr != "" {
+			buf.WriteString(`" sizes="`)
+			buf.WriteString(conf.SizesAttr)
+			buf.WriteString(`"`)
+		}
+	}
+
+	buf.Write(captures[3])
+	buf.WriteString(`>`)
+
+	return buf.Bytes()
+}
+
 func translateHtml(conf *transformConfig, inPath string, outPath string) (err error) {
 	log.Printf("Translating %s", inPath)
 	bytes, err := readFileBytes(inPath)
@@ -51,9 +98,10 @@ func translateHtml(conf *transformConfig, inPath string, outPath string) (err er
 
 	newBytes := imgRegex.ReplaceAllFunc(bytes, func(match []byte) []byte {
 		captures := imgRegex.FindSubmatch(match)
-		keyPath := findImagePath(conf.config, relPath, string(captures[2]))
-		log.Printf("Image: %s - %s - %s", match, captures[2], keyPath)
-		return match
+		log.Printf("Old Image: %s", match)
+		rebuilt := rebuildImage(conf, relPath, captures)
+		log.Printf("New Image: %s", rebuilt)
+		return rebuilt
 	})
 
 	df, err := os.Create(outPath)

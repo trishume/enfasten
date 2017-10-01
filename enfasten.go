@@ -17,6 +17,7 @@ type config struct {
 	OutputFolder string
 	ImageFolder  string
 	ManifestFile string
+	SizesAttr    string
 	// A number between 0-1 where if the downscaling is greater
 	// than this fraction of the width it doesn't bother.
 	ScaleThreshold float64
@@ -60,6 +61,7 @@ func readConfig(basePath string) (conf config, err error) {
 		OutputFolder: "_fastsite",
 		ImageFolder:  "assets/images",
 		ManifestFile: "enfasten_manifest.yml",
+		SizesAttr:    "",
 		// ManifestFile:   "",
 		ScaleThreshold: 0.9,
 		Widths:         []int{},

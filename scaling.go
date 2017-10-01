@@ -29,9 +29,10 @@ type builtImageFile struct {
 }
 
 type builtImage struct {
-	Width  int
-	Height int
-	Files  []builtImageFile
+	OriginalName string
+	Width        int
+	Height       int
+	Files        []builtImageFile
 }
 
 func readManifest(manifestPath string) (manifest map[string]builtImage, err error) {
@@ -185,6 +186,7 @@ func buildImage(conf *config, imagePath string, slug string) (built builtImage, 
 	// copy-paste original file
 	imageFolder := conf.ImageFolderPath()
 	originalName := fmt.Sprintf("%s-original%s", slug, extension)
+	built.OriginalName = originalName
 	originalPath := path.Join(imageFolder, originalName)
 
 	if _, err = os.Stat(originalPath); os.IsNotExist(err) {

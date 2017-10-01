@@ -1,3 +1,4 @@
 inputfolder: _site
 outputfolder: _fastsite
+sizesattr: 660px
 widths: [660,1320]
