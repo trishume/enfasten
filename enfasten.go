@@ -24,6 +24,7 @@ type config struct {
 	Widths         []int
 	Blacklist      []string
 	basePath       string
+	doCulling      bool
 }
 
 func (conf *config) ImageFolderPath() string {
@@ -78,13 +79,14 @@ func readConfig(basePath string) (conf config, err error) {
 	return
 }
 
-func buildFastSite(basePath string) (err error) {
+func buildFastSite(basePath string, doCulling bool) (err error) {
 	conf, err := readConfig(basePath)
 	if err != nil {
 		return
 	}
 
 	conf.basePath = basePath
+	conf.doCulling = doCulling
 
 	foundImages, err := discoverImages(&conf, path.Join(conf.basePath, conf.InputFolder))
 	if err != nil {
@@ -145,8 +147,9 @@ func buildFastSite(basePath string) (err error) {
 
 func main() {
 	basePath := flag.String("basepath", ".", "The folder in which to search for enfasten.yml")
+	cull := flag.Bool("cull", false, "Whether to cull inefficient images this run")
 	flag.Parse()
-	err := buildFastSite(*basePath)
+	err := buildFastSite(*basePath, *cull)
 	if err != nil {
 		log.Fatal("FATAL ERROR: ", err)
 	}

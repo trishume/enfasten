@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 
 	"github.com/bamiaux/rez"
 	"github.com/bmatcuk/doublestar"
@@ -271,6 +272,11 @@ func buildImage(conf *config, imagePath string, slug string, newImages *[]string
 		}
 	}
 
+	// the files list should always be sorted by decreasing width
+	sort.Slice(built.Files, func(i, j int) bool {
+		return built.Files[i].Width > built.Files[j].Width
+	})
+
 	return
 }
 
@@ -286,6 +292,36 @@ func optimizeImages(conf *config, newImages []string) (err error) {
 	return
 }
 
+// sometimes optimizing images leads to ones with larger dimensions actually
+// having smaller file size, if we notice this, we want to cut the inefficient
+// files out of our manifest.
+func cullImages(conf *config, built builtImage) builtImage {
+	if !conf.doCulling {
+		return built
+	}
+
+	newFiles := []builtImageFile{}
+	var bestSize int64 = 1000000000 // arbitrary large number, 1GB
+	imageFolder := conf.ImageFolderPath()
+	for _, builtFile := range built.Files {
+		info, err := os.Stat(path.Join(imageFolder, builtFile.FileName))
+		if err != nil {
+			log.Printf("Couldn't stat %s, removing from manifest", builtFile.FileName)
+			continue // file doesn't exist, shouldn't be in manifest
+		}
+		if info.Size() < bestSize {
+			bestSize = info.Size()
+			newFiles = append(newFiles, builtFile)
+		} else {
+			log.Printf("Culling %s, it is %d bytes when a larger image was only %d bytes",
+				builtFile.FileName, info.Size(), bestSize)
+		}
+	}
+
+	built.Files = newFiles
+	return built
+}
+
 func buildNewManifest(conf *config, foundImages []foundImage, oldManifest map[string]builtImage) (newManifest map[string]builtImage, pathToSlug map[string]string, err error) {
 	newManifest = map[string]builtImage{}
 	pathToSlug = map[string]string{}
@@ -294,7 +330,7 @@ func buildNewManifest(conf *config, foundImages []foundImage, oldManifest map[st
 	for _, img := range foundImages {
 		slug := getSlug(img.Path, img.Hash)
 		if built, ok := oldManifest[slug]; ok {
-			newManifest[slug] = built
+			newManifest[slug] = cullImages(conf, built)
 		} else {
 			var built builtImage
 			built, err = buildImage(conf, img.Path, slug, &newImages)
