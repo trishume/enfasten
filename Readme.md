@@ -1,7 +1,10 @@
 # Enfasten ⚡️
+### Automatically make your site faster with optimized responsive images
 
 Enfasten is a tool written in Go which takes in a static site, scales the images down to a number of different sizes, then rewrites all of your HTML to use [responsive image tags](https://developer.mozilla.org/en-US/docs/Learn/HTML/Multimedia_and_embedding/Responsive_images) with `srcset` attributes. It can also run all of your images through an optimizer like [ImageOptim](https://imageoptim.com/mac).
 This makes your static site faster for people to load because [their browser](http://caniuse.com/#feat=srcset) can load the best image for their screen size and resolution, and it's backwards compatible with older browsers.
+
+Even though they save tons of bandwidth, few sites use optimized responsive images because it requires creating a custom image processing pipeline that has to be incremental in order to achieve good performance. Enfasten solves this problem by doing everything for you!
 
 I wrote this because [on my site](http://thume.ca/) I frequently include images which are absurd sizes, such as a `2146x1258` screenshot from a high-DPI display. The user's browser downloads this huge image and promptly resizes it down to fit in my 660px wide blog. This is especially bad when people without high-DPI displays visit my site, but I still want things to look nice on high-DPI displays. The fact that I don't always remember to [optimize my images](https://blog.codinghorror.com/zopfli-optimization-literally-free-bandwidth/) makes this waste even worse.
 
@@ -201,7 +204,7 @@ Enfasten can output an `enfasten_manifest.yml` file that describes all the image
 
 - **Makes builds faster**: Without a manifest, Enfasten has to load all your image files, parse them to figure out their size, then realize there's already an image like that and skip it. This takes about `1.3s` on my site. With the manifest, Enfasten only has to load files and hash them, which only takes about `0.3`s on my site.
 - **Enables culling**: Culling is a feature where Enfasten can detect smaller dimension images with larger file sizes and delete them. Without the manifest, it can't remember that it did this so if you try and use culling it will immediately re-generate and optimize those images again.
-- **Parse it yourself**: If you want you can also parse this file yourself and use it in your own build steps. There's even an option in Enfasten's config file to not do the copy-and-transform stage of the process so that you can use Enfasten just for its optimizing and resizing and do the rewriting yourself.
+- **Parse it yourself**: If you want you can also parse this file yourself and use it in your own build steps. There's even an option in Enfasten's config file to not do the copy-and-transform stage of the process so that you can use Enfasten just for its optimizing and resizing and do the rewriting yourself. This allows you to use Enfasten with a dynamic web app.
 
 ## Roadmap
 
